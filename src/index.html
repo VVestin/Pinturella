@@ -1,0 +1,318 @@
+<!doctype html>
+<html>
+<head>
+  <title>Pinturella</title>
+  <style>
+    body {
+      background-color: black;
+      color: white;
+      font-family: "Lucida Console", monospace;
+    }
+
+    canvas {
+      border: 4px solid salmon;
+    }
+
+    button {
+      background-color: black;
+      color: white;
+      font-size: 16pt;
+    }
+
+    th {
+      font-size: 18pt;
+      font-weight: bold;
+      border: 2px solid salmon;
+    }
+
+    td {
+      margin: 5px;
+      font-size: 16pt;
+      padding: 5px;
+      font-weight: lighter;
+    }
+
+    #game {
+      float: left;
+    }
+
+    #scoreboard {
+      border: 4px solid salmon;
+      float: left;
+    }
+    #word{
+      float: up;
+      width: 200px;
+      margin: 0 auto;
+    }
+    #draw-style{
+      float: right;
+    }
+    #color-selector {
+      float: right;
+      text-align: right;
+    }
+    #line-selector{
+      float: left;
+    }
+
+    #drawing {
+      float: right;
+    }
+
+    #chat {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      float: right;
+      border: 2px solid white;
+    }
+
+    #messages {
+      width: 500px;
+      height: 800px;
+      border: 2px solid white;
+      word-wrap: break-word;
+      overflow-y: scroll;
+    }
+
+    #chat-input {
+      width: calc(80% - 4px);
+      background-color: black;
+      color: white;
+      font-size: 20px;
+      font-family: "Lucida Console";
+      padding-top: 3px;
+      padding-bottom: 3px;
+      margin: 0;
+    }
+
+    #chat-submit {
+      width: 20%;
+      background-color: black;
+      color: white;
+      font-size: 20px;
+      font-family: "Lucida Console";
+      float: right;
+      padding-top: 3px;
+      padding-bottom: 3px;
+      margin: 0;
+    }
+    #time{
+      float: left;
+    }
+  </style>
+  <script src="floodfill.js"></script>
+  <script>
+    var WIDTH = 600;
+    var HEIGHT = 604;
+    var ctx;
+    var canvas;
+    var drawingEnabled = false;
+    var prev = {x: null, y: null};
+    var lineColor = 'white';
+    var lineWidth = 3;
+    var lastMsgId = 0;
+    var msgPolling = false;
+    var lastDrawId = 0;
+    var drawPolling = false;
+    var wsChat;
+    var wsDraw;
+    var username;
+    var artist;
+    window.onload = function() {
+      canvas = document.getElementById('drawing');
+
+      canvas.width = WIDTH;
+      canvas.height = HEIGHT;
+
+      canvas.addEventListener('mousedown', function(event) {
+        if(username == artist){
+          if(lineWidth==-1){
+            ctx.fillStyle = lineColor;
+            ctx.fillFlood(event.offsetX, event.offsetY, 20);
+          }
+          drawingEnabled = true;
+          sendLine(0, 0);
+        }
+      }, false);
+      canvas.addEventListener('mouseup', function(event) {
+        drawingEnabled = false;
+      }, false);
+      canvas.addEventListener('mousemove', function(event) {
+        if(username == artist){
+          if (drawingEnabled)
+            sendLine(event.offsetX, event.offsetY);
+        }
+      }, false);
+
+      ctx = canvas.getContext('2d');
+
+      wsChat = new WebSocket('ws://67.177.227.182:6213/pinturella/chat');
+      wsChat.onmessage = function(e) {
+        var message = e.data;
+        if(message.startsWith('/time')){
+          document.getElementById('timer').innerHTML = message.substring(6);
+        }
+        else if(message.startsWith('/word')){
+          var word = message.substring(6);
+          document.getElementById('word').innerHTML = word;
+        }
+        else if(message == '/clear'){
+          clearDraw();
+        }
+        else if (message.startsWith('/sb')) {
+            var scoreboard = document.getElementById('scoreboard');
+            while(scoreboard.rows.length > 1) {
+              scoreboard.deleteRow(1);
+            }
+
+            message = message.substring(3);
+            message = JSON.parse(message);
+            artist = message[0];
+            for(var i = 1; i < message.length; i++) {
+              var row = document.createElement('tr')
+              if(artist == message[i]['username']){
+                row.innerHTML = '<td style="color: lime">' + message[i]['username'] + '</td>';
+              }
+              else{
+                row.innerHTML = '<td>' + message[i]['username'] + '</td>';
+              }
+              row.innerHTML += '<td>' + message[i]['points'] + '</td>';
+
+              scoreboard.appendChild(row);
+            }
+        } else {
+          addMessage(message);
+        }
+      };
+
+
+
+      wsChat.onopen = function(e) {
+          username = prompt('What is you\'re name?!?!');
+          console.log('Websocket connected');
+          wsChat.send(username);
+          wsDraw = new WebSocket('ws://67.177.227.182:6213/pinturella/draw?un=' + username);
+          wsDraw.onmessage = function(e) {
+            var point = JSON.parse(e.data);
+            drawLine(point)
+          }
+      };
+
+      loop();
+    }
+
+    function loop() {
+      window.requestAnimationFrame(loop, canvas);
+    }
+
+    function drawLine(point) {
+      if (!(point.x == 0 && point.y == 0) && !(prev.x == 0 && prev.y == 0)) {
+        ctx.strokeStyle = point.color;
+        ctx.lineWidth = point.thickness;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(point.x, point.y);
+        ctx.stroke();
+      }
+      prev = point;
+    }
+
+    function sendLine(x, y) {
+      if(lineWidth<=0){
+        return;
+      }
+      var point = {
+        x: x,
+        y: y,
+        thickness: lineWidth,
+        color: lineColor
+      };
+      drawLine(point);
+      wsDraw.send(JSON.stringify(point))
+    }
+
+    function addMessage(msg) {
+      var messages = document.getElementById('messages');
+      messages.innerHTML += '<hr>' + msg;
+      messages.scrollTop = messages.scrollHeight - messages.clientHeight;
+    }
+
+    function sendMessage() {
+      var chatInput = document.getElementById('chat-input');
+
+      wsChat.send(chatInput.value);
+
+      chatInput.value = '';
+    }
+
+    function clearChat() {
+      var messages = document.getElementById('messages');
+      messages.innerHTML = '';
+    }
+
+    function clearDraw() {
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    }
+  </script>
+</head>
+<body>
+  <h1>Pinturella</h1>
+  <div id = "game">
+    <table id="scoreboard">
+      <tr>
+        <th>Player</th>
+        <th>Score</th>
+      </tr>
+    </table>
+    <div id="draw-style">
+      <h2 id ="word"></h2>
+      <canvas id="drawing"></canvas><br>
+      <div id="color-selector">
+        <button onclick="javascript:lineColor = 'maroon'" style="border: 4px solid maroon">Maroon</button>
+        <button onclick="javascript:lineColor = 'red'" style="border: 4px solid red">Red</button>
+        <button onclick="javascript:lineColor = 'orange'" style="border: 4px solid orange">Orange</button><br>
+        <button onclick="javascript:lineColor = 'yellow'" style="border: 4px solid yellow">Yellow</button>
+        <button onclick="javascript:lineColor = 'lime'" style="border: 4px solid lime">Lime</button>
+        <button onclick="javascript:lineColor = 'green'" style="border: 4px solid green">Green</button><br>
+        <button onclick="javascript:lineColor = 'teal'" style="border: 4px solid teal">Teal</button>
+        <button onclick="javascript:lineColor = 'aqua'" style="border: 4px solid aqua">Aqua</button>
+        <button onclick="javascript:lineColor = 'blue'" style="border: 4px solid blue">Blue</button><br>
+        <button onclick="javascript:lineColor = 'salmon'" style="border: 4px solid salmon">Salmon</button>
+        <button onclick="javascript:lineColor = 'fuchsia'" style="border: 4px solid fuchsia">Fuchsia</button>
+        <button onclick="javascript:lineColor = 'purple'" style="border: 4px solid purple">Purple</button><br>
+        <button onclick="javascript:lineColor = 'gray'" style="border: 4px solid gray">Gray</button>
+        <button onclick="javascript:lineColor = 'white'" style="border: 4px solid white">White</button>
+        <button onclick="javascript:lineColor = 'black'" style="border: 4px solid #222">Black</button>
+      </div>
+      <div id="line-selector">
+        <button onclick="javascript:lineWidth = 1" style="border: 1px solid white">Thin</button><br>
+        <button onclick="javascript:lineWidth = 3" style="border: 3px solid lightgray">Normal</button><br>
+        <button onclick="javascript:lineWidth = 8" style="border: 6px solid gray">Thick</button><br>
+        <button onclick="javascript:lineWidth = 20" style="border: 10px solid #444">Weston</button>
+      </div>
+    </div>
+    <div id="drawing-controls">
+      <button onclick="javascript:if (username == artist) wsChat.send('/clear')" style="border: 4px solid pink">Clear</button>
+      <button onclick="javascript:lineWidth = -1" style="border: 4px solid yellowgreen">Bucket</button>
+      <br>
+      <div id="time">
+      Time Left:
+      <span id="timer">
+      </span>
+      </div>
+    </div>
+
+
+    <div id="chat">
+      <div id="messages"></div>
+      <form onsubmit="javascript:sendMessage()" action="javascript:void(0);" autocomplete="off">
+        <input id="chat-input" type="text"></input>
+        <input id="chat-submit" type="submit"></input>
+      </form>
+    </div>
+  </div>
+</html>
