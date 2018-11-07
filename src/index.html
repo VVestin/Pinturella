@@ -104,6 +104,7 @@
   </style>
   <script src="floodfill.js"></script>
   <script>
+    var IP = "localhost:6213"; //"67.177.227.168:6213";
     var WIDTH = 600;
     var HEIGHT = 604;
     var ctx;
@@ -148,7 +149,7 @@
 
       ctx = canvas.getContext('2d');
 
-      wsChat = new WebSocket('ws://67.177.227.182:6213/pinturella/chat');
+      wsChat = new WebSocket('ws://' + IP + '/pinturella/chat');
       wsChat.onmessage = function(e) {
         var message = e.data;
         if(message.startsWith('/time')){
@@ -193,7 +194,7 @@
           username = prompt('What is you\'re name?!?!');
           console.log('Websocket connected');
           wsChat.send(username);
-          wsDraw = new WebSocket('ws://67.177.227.182:6213/pinturella/draw?un=' + username);
+          wsDraw = new WebSocket('ws://' + IP + '/pinturella/draw?un=' + username);
           wsDraw.onmessage = function(e) {
             var point = JSON.parse(e.data);
             drawLine(point)
@@ -316,3 +317,4 @@
     </div>
   </div>
 </html>
+

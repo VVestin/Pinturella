@@ -208,7 +208,7 @@ func (hub *Hub) startRound() {
 
 	hub.messages <- fmt.Sprintf("[SERVER] New Round: %v is drawing", hub.artist)
 	hub.sendScoreboard()
-	hub.drawingTime = time.After(100 * time.Second)
+	hub.drawingTime = time.After(300 * time.Second)
 
 	numReveal, ok := lettersToReveal[len(hub.word)]
 	if !ok {

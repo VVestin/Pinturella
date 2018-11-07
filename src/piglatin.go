@@ -5,7 +5,20 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"io"
+	"io/ioutil"
+	"encoding/json"
 )
+
+type quoteResponse struct {
+	Quotes []quote `json:"quotes"`
+}
+
+type quote struct {
+	Author string `json:"author"`
+	Quote string `json:"quote"`
+	Tags []string `json:"tags"`
+}
 
 var upgrader = websocket.Upgrader {
 	ReadBufferSize:  128,
@@ -22,7 +35,7 @@ func pigLatin(word string) string {
 		return word
 	}
 	if vowelIdx == 0 {
-		return word + "-way"
+		return word + "-ay"
 	}
 	return word[vowelIdx:] + "-" + word[:vowelIdx] + "ay"
 }
@@ -65,6 +78,32 @@ func main() {
 			return
 		}
 		go echoPigLatin(conn)
+	})
+	http.HandleFunc("/quote", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		resp, err := http.Get("http://opinionated-quotes-api.gigalixirapp.com/v1/quotes")
+		if err != nil {
+			fmt.Printf("Error fetching quote: %v\n", err)
+			return
+		}
+		rawQuote, err := ioutil.ReadAll(resp.Body)
+		var quoteResp quoteResponse
+		err = json.Unmarshal(rawQuote, &quoteResp)
+		if err != nil {
+			fmt.Printf("Error parsing JSON: %v\n", err)
+			return
+		}
+		quoteJSON, err := json.Marshal(quoteResp.Quotes[0])
+		if err != nil {
+			fmt.Printf("Error converting to JSON: %v\n", err)
+			return
+		}
+		if err != nil {
+			fmt.Printf("Error reading quote from response: %v\n", err)
+			return
+		}
+		fmt.Println(string(quoteJSON))
+		io.WriteString(w, string(quoteJSON))
 	})
 	fmt.Println("Server Started...")
 
