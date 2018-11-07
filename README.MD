@@ -4,4 +4,4 @@ Pinturella aims to improve on pinturillo by balancing the scoring system, adding
 
 The app is composed of frontend JavaScript that displays a chat, scoreboard, and drawing canvas which communicates via websockets to a Go backend, which distributes drawing data to all clients and controls the game logic.
 
-![demo-image](pinturella.png)
+![demo-image](pinturella.jpg)
